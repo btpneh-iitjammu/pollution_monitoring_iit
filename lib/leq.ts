@@ -1,0 +1,313 @@
+import type { TimePeriod, TimePeriodOption, LeqResult, ReadingData } from "@/types"
+
+export const TIME_PERIODS: TimePeriodOption[] = [
+  { value: "15min", label: "15 Minutes", durationMs: 15 * 60 * 1000, description: "Short-term exposure" },
+  { value: "1hr", label: "1 Hour", durationMs: 60 * 60 * 1000, description: "Short-term exposure" },
+  { value: "4hr", label: "4 Hours", durationMs: 4 * 60 * 60 * 1000, description: "Medium-term exposure" },
+  { value: "24hr", label: "24 Hours", durationMs: 24 * 60 * 60 * 1000, description: "Daily average" },
+  { value: "7days", label: "7 Days", durationMs: 7 * 24 * 60 * 60 * 1000, description: "Weekly average" },
+  { value: "15days", label: "15 Days", durationMs: 15 * 24 * 60 * 60 * 1000, description: "Bi-weekly average" },
+  { value: "1month", label: "1 Month", durationMs: 30 * 24 * 60 * 60 * 1000, description: "Monthly average" },
+  { value: "6months", label: "6 Months", durationMs: 180 * 24 * 60 * 60 * 1000, description: "Half-year average" },
+  { value: "1year", label: "1 Year", durationMs: 365 * 24 * 60 * 60 * 1000, description: "Annual average" },
+]
+
+export function getTimePeriodDuration(period: TimePeriod): number {
+  const option = TIME_PERIODS.find((p) => p.value === period)
+  return option?.durationMs ?? 24 * 60 * 60 * 1000
+}
+
+export function getNoiseValue(reading: ReadingData): number | null {
+  if (reading.sound_dBA !== undefined && reading.sound_dBA !== null) {
+    const val = Number(reading.sound_dBA)
+    if (!isNaN(val) && val >= 0 && val <= 140) return val
+  }
+  if (reading.noise !== undefined && reading.noise !== null) {
+    const val = Number(reading.noise)
+    if (!isNaN(val) && val >= 0 && val <= 140) return val
+  }
+  return null
+}
+
+export function filterValidReadings(readings: Record<string, ReadingData>): ReadingData[] {
+  return Object.entries(readings)
+    .filter(([key]) => key !== "0")
+    .map(([timestamp, data]) => ({
+      ...data,
+      timestamp: Number(timestamp),
+    }))
+    .filter((reading) => {
+      const noise = getNoiseValue(reading)
+      return noise !== null
+    })
+    .sort((a, b) => a.timestamp - b.timestamp)
+}
+
+export function sampleReadings(readings: ReadingData[], maxSamples: number = 10000): ReadingData[] {
+  if (readings.length <= maxSamples) return readings
+  
+  const step = Math.ceil(readings.length / maxSamples)
+  return readings.filter((_, index) => index % step === 0)
+}
+
+export function calculateLeq(readings: ReadingData[]): LeqResult | null {
+  const validReadings = readings.filter((r) => getNoiseValue(r) !== null)
+  
+  if (validReadings.length === 0) {
+    return null
+  }
+
+  let sum10Pow: number = 0
+  let min: number = Infinity
+  let max: number = -Infinity
+  let sum: number = 0
+
+  for (const reading of validReadings) {
+    const noise = getNoiseValue(reading)
+    if (noise === null) continue
+    
+    sum10Pow += Math.pow(10, noise / 10)
+    
+    if (noise < min) min = noise
+    if (noise > max) max = noise
+    sum += noise
+  }
+
+  const leq = 10 * Math.log10(sum10Pow / validReadings.length)
+  const avg = sum / validReadings.length
+
+  return {
+    leq: Math.round(leq * 100) / 100,
+    min: Math.round(min * 100) / 100,
+    max: Math.round(max * 100) / 100,
+    avg: Math.round(avg * 100) / 100,
+    sampleCount: validReadings.length,
+    timePeriod: "24hr",
+    calculatedAt: new Date(),
+    deviceId: "",
+  }
+}
+
+export function getReadingsForPeriod(
+  readings: Record<string, ReadingData>,
+  period: TimePeriod
+): ReadingData[] {
+  const now = Math.floor(Date.now() / 1000)
+  const duration = getTimePeriodDuration(period) / 1000
+  const startTime = now - duration
+
+  const allReadings = filterValidReadings(readings)
+  
+  const filteredReadings = allReadings.filter((r) => r.timestamp >= startTime)
+
+  const maxSamples = period === "1year" || period === "6months" ? 1000 
+    : period === "1month" || period === "15days" || period === "7days" ? 2000 
+    : period === "24hr" ? 5000 
+    : 10000
+
+  return sampleReadings(filteredReadings, maxSamples)
+}
+
+export function calculateLeqForPeriod(
+  readings: Record<string, ReadingData>,
+  period: TimePeriod,
+  deviceId: string
+): LeqResult | null {
+  const periodReadings = getReadingsForPeriod(readings, period)
+  const result = calculateLeq(periodReadings)
+  
+  if (result) {
+    result.timePeriod = period
+    result.deviceId = deviceId
+  }
+  
+  return result
+}
+
+export function getLeqCategory(leq: number): { 
+  category: string
+  color: string
+  bg: string
+  description: string 
+} {
+  if (leq < 50) {
+    return {
+      category: "Quiet",
+      color: "text-green-600",
+      bg: "bg-green-100",
+      description: "Safe ambient noise levels"
+    }
+  }
+  if (leq < 60) {
+    return {
+      category: "Moderate",
+      color: "text-green-600",
+      bg: "bg-green-100",
+      description: "Normal conversation level"
+    }
+  }
+  if (leq < 70) {
+    return {
+      category: "Elevated",
+      color: "text-yellow-600",
+      bg: "bg-yellow-100",
+      description: "May cause annoyance over time"
+    }
+  }
+  if (leq < 80) {
+    return {
+      category: "Loud",
+      color: "text-orange-600",
+      bg: "bg-orange-100",
+      description: "Prolonged exposure may cause damage"
+    }
+  }
+  if (leq < 85) {
+    return {
+      category: "Very Loud",
+      color: "text-orange-600",
+      bg: "bg-orange-100",
+      description: "Hearing protection recommended"
+    }
+  }
+  return {
+    category: "Dangerous",
+    color: "text-red-600",
+    bg: "bg-red-100",
+    description: "Risk of hearing damage"
+  }
+}
+
+export interface DataAvailability {
+  hasData: boolean
+  totalReadings: number
+  firstReading: Date | null
+  lastReading: Date | null
+  lastReadingAge: number | null
+  availablePeriods: TimePeriod[]
+  dataRange: string
+}
+
+export function getDataAvailability(
+  readings: Record<string, ReadingData>
+): DataAvailability {
+  const validReadings = filterValidReadings(readings)
+  
+  if (validReadings.length === 0) {
+    return {
+      hasData: false,
+      totalReadings: 0,
+      firstReading: null,
+      lastReading: null,
+      lastReadingAge: null,
+      availablePeriods: [],
+      dataRange: "No data available"
+    }
+  }
+
+  const timestamps = validReadings.map(r => r.timestamp)
+  const firstTs = Math.min(...timestamps)
+  const lastTs = Math.max(...timestamps)
+  
+  const firstReading = new Date(firstTs * 1000)
+  const lastReading = new Date(lastTs * 1000)
+  
+  const now = Date.now()
+  const lastReadingAge = now - (lastTs * 1000)
+
+  const availablePeriods: TimePeriod[] = []
+  
+  for (const period of TIME_PERIODS) {
+    const periodStart = now - period.durationMs
+    const hasDataInPeriod = validReadings.some(r => r.timestamp * 1000 >= periodStart)
+    if (hasDataInPeriod) {
+      availablePeriods.push(period.value)
+    }
+  }
+
+  const dataRange = formatDataRange(firstReading, lastReading)
+  
+  return {
+    hasData: true,
+    totalReadings: validReadings.length,
+    firstReading,
+    lastReading,
+    lastReadingAge,
+    availablePeriods,
+    dataRange
+  }
+}
+
+function formatDataRange(first: Date, last: Date): string {
+  const firstStr = first.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+  const lastStr = last.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+  return `${firstStr} - ${lastStr}`
+}
+
+export function formatLastReadingAge(ageMs: number): string {
+  const minutes = Math.floor(ageMs / (1000 * 60))
+  const hours = Math.floor(ageMs / (1000 * 60 * 60))
+  const days = Math.floor(ageMs / (1000 * 60 * 60 * 24))
+
+  if (minutes < 60) {
+    return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`
+  }
+  if (hours < 24) {
+    return `${hours} hour${hours !== 1 ? 's' : ''} ago`
+  }
+  return `${days} day${days !== 1 ? 's' : ''} ago`
+}
+
+export function getBestAvailablePeriod(availablePeriods: TimePeriod[]): TimePeriod | null {
+  if (availablePeriods.length === 0) return null
+  return availablePeriods[availablePeriods.length - 1]
+}
+
+export function calculateLeqWithFallback(
+  readings: Record<string, ReadingData>,
+  requestedPeriod: TimePeriod,
+  deviceId: string
+): { leq: LeqResult | null; availablePeriod: TimePeriod; isFallback: boolean; message: string } {
+  const result = calculateLeqForPeriod(readings, requestedPeriod, deviceId)
+  
+  if (result && result.sampleCount > 0) {
+    return {
+      leq: result,
+      availablePeriod: requestedPeriod,
+      isFallback: false,
+      message: `Leq calculated from ${result.sampleCount.toLocaleString()} readings`
+    }
+  }
+
+  const availability = getDataAvailability(readings)
+  
+  if (!availability.hasData) {
+    return {
+      leq: null,
+      availablePeriod: requestedPeriod,
+      isFallback: true,
+      message: "No noise data available for this device"
+    }
+  }
+
+  const bestPeriod = getBestAvailablePeriod(availability.availablePeriods)
+  
+  if (bestPeriod) {
+    const fallbackResult = calculateLeqForPeriod(readings, bestPeriod, deviceId)
+    const periodLabel = TIME_PERIODS.find(p => p.value === bestPeriod)?.label ?? bestPeriod
+    
+    return {
+      leq: fallbackResult,
+      availablePeriod: bestPeriod,
+      isFallback: true,
+      message: `No data for ${requestedPeriod}. Showing Leq for ${periodLabel} instead (${fallbackResult?.sampleCount.toLocaleString() ?? 0} readings)`
+    }
+  }
+
+  return {
+    leq: null,
+    availablePeriod: requestedPeriod,
+    isFallback: true,
+    message: "Unable to calculate Leq for any time period"
+  }
+}

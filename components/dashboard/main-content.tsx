@@ -8,6 +8,7 @@ import DeviceDetailPanel from "./device-detail-panel"
 import TrendsAnalytics from "./trends-analytics"
 import AlertsPanel from "./alerts-panel"
 import SummaryInsights from "./summary-insights"
+import LeqChart from "./leq-chart"
 import { getDeviceStatus } from "@/lib/utils"
 
 interface MainContentProps {
@@ -65,6 +66,9 @@ export default function MainContent({
 
           {/* Device Overview Cards */}
           <DeviceCards devices={filteredDevices} onSelectDevice={handleDeviceClick} />
+
+          {/* Leq Calculator */}
+          <LeqChart devices={devices} />
 
           {/* Trends & Analytics */}
           <TrendsAnalytics devices={filteredDevices} />

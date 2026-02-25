@@ -37,6 +37,37 @@ export type DeviceStatus = "normal" | "warning" | "critical"
 export interface TrendDataPoint {
   time: string
   noise: number
+  frequency: number
   pm25: number
   temperature: number
+}
+
+export type TimePeriod = "15min" | "1hr" | "4hr" | "24hr" | "7days" | "15days" | "1month" | "6months" | "1year"
+
+export interface TimePeriodOption {
+  value: TimePeriod
+  label: string
+  durationMs: number
+  description: string
+}
+
+export interface LeqResult {
+  leq: number
+  min: number
+  max: number
+  avg: number
+  sampleCount: number
+  timePeriod: TimePeriod
+  calculatedAt: Date
+  deviceId: string
+}
+
+export interface ReadingData {
+  timestamp: number
+  sound_dBA?: number
+  sound_freq?: number
+  noise?: number
+  emissions?: number
+  temperature?: number
+  datetime?: string
 }
