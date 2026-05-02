@@ -1,17 +1,16 @@
 "use client"
 
-import { useState } from "react"
-import { X, Volume2, Waves, Wind, Thermometer, Download, Settings, AlertTriangle } from "lucide-react"
+import { useMemo, type ComponentType } from "react"
+import { Volume2, Waves, Wind, Thermometer, Download, Settings } from "lucide-react"
 import type { Device } from "@/types"
 import { getDeviceStatus } from "@/lib/utils"
 import { LineChart, Line, ResponsiveContainer } from "recharts"
 
-interface DeviceDetailPanelProps {
+interface DeviceDetailContentProps {
   device: Device
-  onClose: () => void
 }
 
-export default function DeviceDetailPanel({ device, onClose }: DeviceDetailPanelProps) {
+export default function DeviceDetailContent({ device }: DeviceDetailContentProps) {
   const status = getDeviceStatus(device)
 
   const getStatusBadge = () => {
@@ -28,29 +27,31 @@ export default function DeviceDetailPanel({ device, onClose }: DeviceDetailPanel
   const badge = getStatusBadge()
 
   const getFrequencyBand = (freq: number) => {
-    if (freq < 250) return { 
-      band: "Low Frequency", 
-      range: "20-250 Hz", 
-      color: "text-blue-600", 
-      bg: "bg-blue-100",
-      description: "Rumble, bass, machinery, HVAC systems",
-      sources: "Vehicles, industrial equipment, thunder"
-    }
-    if (freq < 2000) return { 
-      band: "Mid Frequency", 
-      range: "250-2000 Hz", 
-      color: "text-green-600", 
-      bg: "bg-green-100",
-      description: "Speech, music, general environment",
-      sources: "Human voice, traffic noise, office sounds"
-    }
-    return { 
-      band: "High Frequency", 
-      range: "2000-20000 Hz", 
-      color: "text-red-600", 
+    if (freq < 250)
+      return {
+        band: "Low Frequency",
+        range: "20-250 Hz",
+        color: "text-blue-600",
+        bg: "bg-blue-100",
+        description: "Rumble, bass, machinery, HVAC systems",
+        sources: "Vehicles, industrial equipment, thunder",
+      }
+    if (freq < 2000)
+      return {
+        band: "Mid Frequency",
+        range: "250-2000 Hz",
+        color: "text-green-600",
+        bg: "bg-green-100",
+        description: "Speech, music, general environment",
+        sources: "Human voice, traffic noise, office sounds",
+      }
+    return {
+      band: "High Frequency",
+      range: "2000-20000 Hz",
+      color: "text-red-600",
       bg: "bg-red-100",
       description: "Treble, sharp sounds, alarms",
-      sources: "Alarms, whistles, mechanical squeals, birds"
+      sources: "Alarms, whistles, mechanical squeals, birds",
     }
   }
 
@@ -65,7 +66,7 @@ export default function DeviceDetailPanel({ device, onClose }: DeviceDetailPanel
   const getSoundProfile = (dB: number, freq: number) => {
     const band = getFrequencyBand(freq)
     const noise = getNoiseCategory(dB)
-    
+
     let interpretation = ""
     if (dB < 50 && freq < 250) {
       interpretation = "Low ambient hum - likely HVAC or distant traffic"
@@ -86,7 +87,7 @@ export default function DeviceDetailPanel({ device, onClose }: DeviceDetailPanel
     } else {
       interpretation = "Loud high-frequency alert - potential hazard, investigate"
     }
-    
+
     return { interpretation, band, noise }
   }
 
@@ -99,16 +100,18 @@ export default function DeviceDetailPanel({ device, onClose }: DeviceDetailPanel
     return ((logFreq - logMin) / (logMax - logMin)) * 100
   }
 
-  // Show current reading as timeline data
-  const [timelineData] = useState(() => [
-    {
-      time: 0,
-      noise: device.noise,
-      frequency: device.frequency,
-      pm25: device.pm25,
-      temp: device.temperature,
-    },
-  ])
+  const timelineData = useMemo(
+    () => [
+      {
+        time: 0,
+        noise: device.noise,
+        frequency: device.frequency,
+        pm25: device.pm25,
+        temp: device.temperature,
+      },
+    ],
+    [device.noise, device.frequency, device.pm25, device.temperature],
+  )
 
   const SensorGauge = ({
     icon: Icon,
@@ -119,7 +122,7 @@ export default function DeviceDetailPanel({ device, onClose }: DeviceDetailPanel
     dangerThreshold,
     max,
   }: {
-    icon: any
+    icon: ComponentType<{ className?: string }>
     label: string
     unit: string
     value: number
@@ -128,8 +131,6 @@ export default function DeviceDetailPanel({ device, onClose }: DeviceDetailPanel
     max: number
   }) => {
     const percentage = (value / max) * 100
-    const warningPercent = (warningThreshold / max) * 100
-    const dangerPercent = (dangerThreshold / max) * 100
 
     return (
       <div className="mb-6">
@@ -184,9 +185,9 @@ export default function DeviceDetailPanel({ device, onClose }: DeviceDetailPanel
           <div className="flex-1 bg-blue-300" />
           <div className="flex-1 bg-green-300" />
           <div className="flex-1 bg-red-300" />
-          <div 
+          <div
             className={`absolute top-0 bottom-0 w-1.5 ${freqBand.bg} rounded-full shadow-sm`}
-            style={{ left: `${position}%`, transform: 'translateX(-50%)' }}
+            style={{ left: `${position}%`, transform: "translateX(-50%)" }}
           />
         </div>
 
@@ -201,22 +202,8 @@ export default function DeviceDetailPanel({ device, onClose }: DeviceDetailPanel
   }
 
   return (
-    <div className="w-[380px] bg-white border-l border-gray-200 flex flex-col h-full">
-      {/* Header */}
-      <div className="p-4 border-b border-gray-100">
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">{device.id}</h2>
-            <p className="text-sm text-gray-500">{device.location}</p>
-          </div>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg transition-colors">
-            <X className="w-5 h-5 text-gray-400" />
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4">
-        {/* Device Status */}
+    <>
+      <div className="flex-1 overflow-y-auto p-4 min-h-0">
         <div className="mb-6">
           <h3 className="text-sm font-medium text-gray-500 mb-3">Device Status</h3>
           <div className="flex items-center gap-4">
@@ -245,7 +232,6 @@ export default function DeviceDetailPanel({ device, onClose }: DeviceDetailPanel
           </div>
         </div>
 
-        {/* Device Metadata */}
         <div className="mb-6">
           <h3 className="text-sm font-medium text-gray-500 mb-3">Device Metadata</h3>
           <div className="space-y-3 bg-gray-50 rounded-lg p-3">
@@ -268,7 +254,6 @@ export default function DeviceDetailPanel({ device, onClose }: DeviceDetailPanel
           </div>
         </div>
 
-        {/* Sound Profile */}
         <div className="mb-6">
           <h3 className="text-sm font-medium text-gray-500 mb-3">Sound Profile</h3>
           <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-4 border border-gray-200">
@@ -282,16 +267,16 @@ export default function DeviceDetailPanel({ device, onClose }: DeviceDetailPanel
                 <span className="font-semibold text-gray-900">{device.frequency.toFixed(1)} Hz</span>
               </div>
             </div>
-            
+
             <div className="mb-3">
               <p className="text-xs text-gray-500 mb-1">Frequency Band</p>
               <div className="relative h-3 bg-gray-200 rounded-full overflow-hidden">
                 <div className="absolute inset-y-0 left-0 w-1/3 bg-blue-300 rounded-l-full" />
                 <div className="absolute inset-y-0 left-1/3 w-1/3 bg-green-300" />
                 <div className="absolute inset-y-0 right-0 w-1/3 bg-red-300 rounded-r-full" />
-                <div 
+                <div
                   className={`absolute top-0 bottom-0 w-2 ${getFrequencyBand(device.frequency).bg} rounded-full shadow-md border-2 border-white`}
-                  style={{ left: `${getFrequencyPosition(device.frequency)}%`, transform: 'translateX(-50%)' }}
+                  style={{ left: `${getFrequencyPosition(device.frequency)}%`, transform: "translateX(-50%)" }}
                 />
               </div>
               <div className="flex justify-between text-[10px] text-gray-400 mt-1">
@@ -301,17 +286,23 @@ export default function DeviceDetailPanel({ device, onClose }: DeviceDetailPanel
                 <span>20 kHz</span>
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <div className="flex items-start gap-2">
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${getFrequencyBand(device.frequency).bg} ${getFrequencyBand(device.frequency).color}`}>
+                <span
+                  className={`text-xs font-medium px-2 py-0.5 rounded-full ${getFrequencyBand(device.frequency).bg} ${getFrequencyBand(device.frequency).color}`}
+                >
                   {getFrequencyBand(device.frequency).band}
                 </span>
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                  getNoiseCategory(device.noise).risk === "High" ? "bg-red-100 text-red-700" :
-                  getNoiseCategory(device.noise).risk === "Medium" ? "bg-yellow-100 text-yellow-700" :
-                  "bg-gray-100 text-gray-700"
-                }`}>
+                <span
+                  className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                    getNoiseCategory(device.noise).risk === "High"
+                      ? "bg-red-100 text-red-700"
+                      : getNoiseCategory(device.noise).risk === "Medium"
+                        ? "bg-yellow-100 text-yellow-700"
+                        : "bg-gray-100 text-gray-700"
+                  }`}
+                >
                   {getNoiseCategory(device.noise).category}
                 </span>
               </div>
@@ -321,7 +312,6 @@ export default function DeviceDetailPanel({ device, onClose }: DeviceDetailPanel
           </div>
         </div>
 
-        {/* Live Sensor Readings */}
         <div className="mb-6">
           <h3 className="text-sm font-medium text-gray-500 mb-4">Live Sensor Readings</h3>
 
@@ -358,7 +348,6 @@ export default function DeviceDetailPanel({ device, onClose }: DeviceDetailPanel
           />
         </div>
 
-        {/* Last 60 Minutes Timeline */}
         <div>
           <h3 className="text-sm font-medium text-gray-500 mb-3">Last 60 Minutes Timeline</h3>
           <div className="bg-gray-50 rounded-lg p-3 h-24">
@@ -375,17 +364,22 @@ export default function DeviceDetailPanel({ device, onClose }: DeviceDetailPanel
         </div>
       </div>
 
-      {/* Footer Actions */}
-      <div className="p-4 border-t border-gray-100 flex gap-3">
-        <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+      <div className="p-4 border-t border-gray-100 flex gap-3 shrink-0 bg-white">
+        <button
+          type="button"
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+        >
           <Download className="w-4 h-4" />
           Export Data
         </button>
-        <button className="flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+        <button
+          type="button"
+          className="flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+        >
           <Settings className="w-4 h-4" />
           Configure
         </button>
       </div>
-    </div>
+    </>
   )
 }
