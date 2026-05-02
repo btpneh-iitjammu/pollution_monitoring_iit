@@ -10,7 +10,6 @@ import {
   CartesianGrid,
   ResponsiveContainer,
   Tooltip,
-  Legend,
   ComposedChart,
   ReferenceLine,
 } from "recharts"
@@ -380,8 +379,12 @@ export default function TrendsAnalytics({ devices }: TrendsAnalyticsProps) {
                     fill: "#1d4ed8",
                   }}
                 />
-                <Tooltip />
-                <Legend />
+                <Tooltip
+                  formatter={(value: unknown, name: unknown) => {
+                    const n = typeof name === "string" ? name : String(name ?? "")
+                    return [typeof value === "number" ? value.toFixed(2) : String(value ?? ""), n]
+                  }}
+                />
                 <ReferenceLine
                   yAxisId="noise"
                   y={80}
@@ -422,15 +425,30 @@ export default function TrendsAnalytics({ devices }: TrendsAnalyticsProps) {
           )}
         </div>
 
-        <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t border-gray-100 flex-wrap">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-0.5 bg-green-500" />
-            <span className="text-sm text-gray-500">Noise (dB) — left axis</span>
+        <div className="flex flex-col items-center gap-2 mt-4 pt-4 border-t border-gray-100">
+          <div className="flex items-center justify-center gap-6 flex-wrap">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-0.5 bg-green-500" />
+              <span className="text-sm text-gray-600">
+                {stationFilter === ALL_STATIONS
+                  ? "Noise (dB), all stations — left axis"
+                  : `Noise (dB) — ${stationFilter}`}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-0.5 bg-blue-500 border-dashed border-t-2 border-blue-500 h-0 bg-transparent" />
+              <span className="text-sm text-gray-600">
+                {stationFilter === ALL_STATIONS
+                  ? "PM2.5 (µg/m³), all stations — right axis"
+                  : `PM2.5 — ${stationFilter}`}
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-0.5 bg-blue-500 border-dashed border-t-2 border-blue-500 h-0 bg-transparent" />
-            <span className="text-sm text-gray-500">PM2.5 — right axis</span>
-          </div>
+          <p className="text-xs text-gray-400 text-center max-w-xl">
+            {stationFilter === ALL_STATIONS
+              ? "One green line and one blue line per station. Hover the chart to see station IDs and values."
+              : "Single-station view for the selected device."}
+          </p>
         </div>
 
         <div className="flex justify-between mt-2 text-xs text-gray-400">

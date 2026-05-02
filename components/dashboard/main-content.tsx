@@ -64,7 +64,7 @@ export default function MainContent({
         )}
         {activeSection === "analytics" && (
           <div className="space-y-6">
-            <AnalyticsReportCards />
+            <AnalyticsReportCards devices={devices} alerts={alerts} />
             <LeqChart devices={devices} />
             <TrendsAnalytics devices={devices} />
           </div>
