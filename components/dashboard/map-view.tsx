@@ -179,8 +179,8 @@ export default function MapView({ devices, locations, selectedDevice, onSelectDe
         </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden relative h-[320px]">
-        <div id="map" style={{ width: "100%", height: "100%", position: "absolute", inset: 0 }} />
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden relative z-0 isolate h-[320px]">
+        <div id="map" className="absolute inset-0 z-0" style={{ width: "100%", height: "100%" }} />
       </div>
     </div>
   )
