@@ -42,7 +42,19 @@ export interface TrendDataPoint {
   temperature: number
 }
 
-export type TimePeriod = "15min" | "1hr" | "4hr" | "24hr" | "7days" | "15days" | "1month" | "6months" | "1year"
+/** Averaging windows for LAeq-style calculators (see lib/leq.ts). */
+export type TimePeriod =
+  | "15sec"
+  | "60sec"
+  | "15min"
+  | "1hr"
+  | "24hr"
+  | "15days"
+  | "1month"
+  | "3months"
+  | "6months"
+  | "1year"
+  | "alltime"
 
 export interface TimePeriodOption {
   value: TimePeriod
