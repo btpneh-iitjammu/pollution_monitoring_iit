@@ -16,7 +16,7 @@ import {
 } from "recharts"
 import { useFirebaseData } from "@/hooks/useFirebaseData"
 import { format, startOfDay, endOfDay, subDays } from "date-fns"
-import { CalendarIcon } from "lucide-react"
+import { CalendarIcon, Radio } from "lucide-react"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
@@ -31,6 +31,9 @@ import { cn } from "@/lib/utils"
 
 const ALL_STATIONS = "__all__"
 const MAX_CHART_POINTS = 280
+/** Rolling window when Live is on (seconds). */
+const LIVE_WINDOW_SEC = 60 * 60
+const LIVE_CLOCK_MS = 10_000
 
 interface TrendsAnalyticsProps {
   devices: Device[]
@@ -64,8 +67,17 @@ export default function TrendsAnalytics({ devices }: TrendsAnalyticsProps) {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(defaultRange)
   const [rangeOpen, setRangeOpen] = useState(false)
   const [historicalData, setHistoricalData] = useState<Record<string, unknown>[]>([])
+  const [liveMode, setLiveMode] = useState(false)
+  const [liveTick, setLiveTick] = useState(0)
 
   const { data: readings } = useFirebaseData<Record<string, Record<string, unknown>>>("readings")
+
+  useEffect(() => {
+    if (!liveMode) return
+    setLiveTick(Date.now())
+    const id = window.setInterval(() => setLiveTick(Date.now()), LIVE_CLOCK_MS)
+    return () => window.clearInterval(id)
+  }, [liveMode])
 
   useEffect(() => {
     if (stationFilter !== ALL_STATIONS && !devices.some((d) => d.id === stationFilter)) {
@@ -84,6 +96,17 @@ export default function TrendsAnalytics({ devices }: TrendsAnalyticsProps) {
   }, [devices, stationFilter])
 
   const rangeBounds = useMemo(() => {
+    if (liveMode) {
+      const nowMs = liveTick || Date.now()
+      const nowSec = Math.floor(nowMs / 1000)
+      const startSec = nowSec - LIVE_WINDOW_SEC
+      return {
+        startSec,
+        endSec: nowSec,
+        start: new Date(startSec * 1000),
+        end: new Date(nowSec * 1000),
+      }
+    }
     const from = dateRange?.from
     const to = dateRange?.to ?? dateRange?.from
     if (!from || !to) return null
@@ -95,7 +118,7 @@ export default function TrendsAnalytics({ devices }: TrendsAnalyticsProps) {
       start,
       end,
     }
-  }, [dateRange])
+  }, [dateRange, liveMode, liveTick])
 
   useEffect(() => {
     if (!readings || devices.length === 0 || !rangeBounds) {
@@ -198,7 +221,9 @@ export default function TrendsAnalytics({ devices }: TrendsAnalyticsProps) {
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Trends & Analytics</h2>
           <p className="text-sm text-gray-500">
-            Noise (dB) and PM2.5 (µg/m³) — filtered by station and date range
+            {liveMode
+              ? `Live: rolling last ${LIVE_WINDOW_SEC / 60} minutes — updates as new readings arrive via Firebase.`
+              : "Noise (dB) and PM2.5 (µg/m³) — filtered by station and date range"}
           </p>
         </div>
 
@@ -228,25 +253,38 @@ export default function TrendsAnalytics({ devices }: TrendsAnalyticsProps) {
                   <Button
                     type="button"
                     variant="outline"
+                    disabled={liveMode}
                     className={cn(
                       "w-full sm:w-[280px] justify-start text-left font-normal border-gray-200 bg-white",
                       !dateRange?.from && "text-muted-foreground",
+                      liveMode && "opacity-60 cursor-not-allowed",
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-                    {rangeLabel}
+                    {liveMode ? "Date range (disabled while live)" : rangeLabel}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0 z-[1200]" align="start">
                   <Calendar
                     mode="range"
                     selected={dateRange}
-                    onSelect={(r) => setDateRange(r)}
+                    onSelect={(r) => {
+                      setLiveMode(false)
+                      setDateRange(r)
+                    }}
                     numberOfMonths={2}
                     defaultMonth={dateRange?.from}
                   />
                   <div className="flex items-center justify-end gap-2 p-3 border-t border-gray-100">
-                    <Button type="button" variant="ghost" size="sm" onClick={() => setDateRange(defaultRange())}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setLiveMode(false)
+                        setDateRange(defaultRange())
+                      }}
+                    >
                       Reset (7 days)
                     </Button>
                     <Button type="button" size="sm" onClick={() => setRangeOpen(false)}>
@@ -258,7 +296,27 @@ export default function TrendsAnalytics({ devices }: TrendsAnalyticsProps) {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1 items-center">
+            <Button
+              type="button"
+              variant={liveMode ? "default" : "secondary"}
+              size="sm"
+              className={cn(
+                "text-xs border gap-1.5",
+                liveMode
+                  ? "bg-green-600 hover:bg-green-700 text-white border-green-700 shadow-sm"
+                  : "bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-200",
+              )}
+              disabled={devices.length === 0}
+              onClick={() => {
+                if (devices.length === 0) return
+                setLiveMode((v) => !v)
+                setRangeOpen(false)
+              }}
+            >
+              <Radio className={cn("w-3.5 h-3.5", liveMode && "animate-pulse")} />
+              {liveMode ? "Live on" : "Live data"}
+            </Button>
             {[
               { label: "24h", days: 1 },
               { label: "7d", days: 7 },
@@ -270,7 +328,10 @@ export default function TrendsAnalytics({ devices }: TrendsAnalyticsProps) {
                 variant="secondary"
                 size="sm"
                 className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-200"
-                onClick={() => applyPresetDays(days)}
+                onClick={() => {
+                  setLiveMode(false)
+                  applyPresetDays(days)
+                }}
               >
                 Last {label}
               </Button>
@@ -373,10 +434,19 @@ export default function TrendsAnalytics({ devices }: TrendsAnalyticsProps) {
         </div>
 
         <div className="flex justify-between mt-2 text-xs text-gray-400">
-          <span>
-            {rangeBounds
-              ? `${format(rangeBounds.start, "MMM d, yyyy")} → ${format(rangeBounds.end, "MMM d, yyyy")}`
-              : "—"}
+          <span className="flex items-center gap-2 min-w-0">
+            {liveMode && rangeBounds ? (
+              <>
+                <span className="inline-flex w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
+                <span className="truncate">
+                  Live window: {format(rangeBounds.start, "MMM d, HH:mm")} → now
+                </span>
+              </>
+            ) : rangeBounds ? (
+              `${format(rangeBounds.start, "MMM d, yyyy")} → ${format(rangeBounds.end, "MMM d, yyyy")}`
+            ) : (
+              "—"
+            )}
           </span>
           <span>
             {historicalData.length > 0 && trendData.length > 0
