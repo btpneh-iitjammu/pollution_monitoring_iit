@@ -184,6 +184,8 @@ export default function TrendsAnalytics({ devices }: TrendsAnalyticsProps) {
                 : undefined
           dataPoint[`${deviceId}_pm25`] =
             typeof r.emissions === "number" ? r.emissions : undefined
+          dataPoint[`${deviceId}_temp`] =
+            typeof r.temperature === "number" ? r.temperature : undefined
         }
       })
 
@@ -200,6 +202,7 @@ export default function TrendsAnalytics({ devices }: TrendsAnalyticsProps) {
       time: "Current",
       [`${device.id}_noise`]: device.noise ?? 0,
       [`${device.id}_pm25`]: device.pm25 ?? 0,
+      [`${device.id}_temp`]: device.temperature ?? 0,
     }))
   }, [historicalData, devicesForChart])
 
@@ -222,7 +225,7 @@ export default function TrendsAnalytics({ devices }: TrendsAnalyticsProps) {
           <p className="text-sm text-gray-500">
             {liveMode
               ? `Live: rolling last ${LIVE_WINDOW_SEC / 60} minutes — updates as new readings arrive via Firebase.`
-              : "Noise (dB) and PM2.5 (µg/m³) — filtered by station and date range"}
+              : "Noise (dB), PM2.5 (µg/m³), and temperature (°C) — filtered by station and date range"}
           </p>
         </div>
 
@@ -354,7 +357,7 @@ export default function TrendsAnalytics({ devices }: TrendsAnalyticsProps) {
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={trendData} margin={{ top: 5, right: 16, left: 8, bottom: 5 }}>
+              <ComposedChart data={trendData} margin={{ top: 5, right: 52, left: 8, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="time" tick={{ fontSize: 11 }} stroke="#9ca3af" interval="preserveStartEnd" />
                 <YAxis
@@ -368,15 +371,33 @@ export default function TrendsAnalytics({ devices }: TrendsAnalyticsProps) {
                 <YAxis
                   yAxisId="pm25"
                   orientation="right"
-                  tick={{ fontSize: 11 }}
+                  width={56}
+                  tick={{ fontSize: 10 }}
                   stroke="#2563eb"
                   domain={[0, "auto"]}
                   label={{
-                    value: "PM2.5 (µg/m³)",
+                    value: "PM2.5",
                     angle: 90,
                     position: "insideRight",
-                    fontSize: 11,
+                    offset: 10,
+                    fontSize: 10,
                     fill: "#1d4ed8",
+                  }}
+                />
+                <YAxis
+                  yAxisId="temp"
+                  orientation="right"
+                  width={48}
+                  tick={{ fontSize: 10 }}
+                  stroke="#d97706"
+                  domain={["auto", "auto"]}
+                  label={{
+                    value: "°C",
+                    angle: 90,
+                    position: "insideRight",
+                    offset: 10,
+                    fontSize: 10,
+                    fill: "#b45309",
                   }}
                 />
                 <Tooltip
@@ -418,6 +439,18 @@ export default function TrendsAnalytics({ devices }: TrendsAnalyticsProps) {
                       name={`${deviceId} PM2.5 (µg/m³)`}
                       connectNulls
                     />,
+                    <Line
+                      key={`${deviceId}_temp`}
+                      yAxisId="temp"
+                      type="monotone"
+                      dataKey={`${deviceId}_temp`}
+                      stroke="#f59e0b"
+                      strokeWidth={1.75}
+                      strokeDasharray="2 4"
+                      dot={false}
+                      name={`${deviceId} Temp (°C)`}
+                      connectNulls
+                    />,
                   ]
                 })}
               </ComposedChart>
@@ -439,14 +472,22 @@ export default function TrendsAnalytics({ devices }: TrendsAnalyticsProps) {
               <div className="w-4 h-0.5 bg-blue-500 border-dashed border-t-2 border-blue-500 h-0 bg-transparent" />
               <span className="text-sm text-gray-600">
                 {stationFilter === ALL_STATIONS
-                  ? "PM2.5 (µg/m³), all stations — right axis"
+                  ? "PM2.5 (µg/m³), all stations — outer right scale"
                   : `PM2.5 — ${stationFilter}`}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-1 border-b-2 border-dashed border-amber-500" />
+              <span className="text-sm text-gray-600">
+                {stationFilter === ALL_STATIONS
+                  ? "Temperature (°C), all stations — inner right scale"
+                  : `Temperature (°C) — ${stationFilter}`}
               </span>
             </div>
           </div>
           <p className="text-xs text-gray-400 text-center max-w-xl">
             {stationFilter === ALL_STATIONS
-              ? "One green line and one blue line per station. Hover the chart to see station IDs and values."
+              ? "Three lines per station (noise, PM2.5, temperature). Hover the chart for exact values."
               : "Single-station view for the selected device."}
           </p>
         </div>
